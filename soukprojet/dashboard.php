@@ -307,6 +307,9 @@ $trsData = calculateCurrentTRS();
                                 <button type="button" class="machine-btn machine-btn-pause" id="machine-pause-13" onclick="pauseMachine(13)" disabled>
                                     Pause
                                 </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="machine-resume-13" onclick="resumeMachine(13)" style="display: none;">
+                                    Reprendre
+                                </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="machine-stop-13" onclick="stopMachine(13)" disabled>
                                     Stop
                                 </button>
@@ -398,6 +401,9 @@ $trsData = calculateCurrentTRS();
                                 <button type="button" class="machine-btn machine-btn-pause" id="machine-pause-20" onclick="pauseMachine(20)" disabled>
                                     Pause
                                 </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="machine-resume-20" onclick="resumeMachine(20)" style="display: none;">
+                                    Reprendre
+                                </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="machine-stop-20" onclick="stopMachine(20)" disabled>
                                     Stop
                                 </button>
@@ -488,6 +494,9 @@ $trsData = calculateCurrentTRS();
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-pause" id="machine-pause-50" onclick="pauseMachine(50)" disabled>
                                     Pause
+                                </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="machine-resume-50" onclick="resumeMachine(50)" style="display: none;">
+                                    Reprendre
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="machine-stop-50" onclick="stopMachine(50)" disabled>
                                     Stop
@@ -584,6 +593,9 @@ $trsData = calculateCurrentTRS();
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-pause" id="machine-pause-70" onclick="pauseMachine(70)" disabled>
                                     Pause
+                                </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="machine-resume-70" onclick="resumeMachine(70)" style="display: none;">
+                                    Reprendre
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="machine-stop-70" onclick="stopMachine(70)" disabled>
                                     Stop
@@ -682,6 +694,9 @@ $trsData = calculateCurrentTRS();
                                 <button type="button" class="machine-btn machine-btn-pause" id="sechoir-pause-1" onclick="pauseSechoir(1)">
                                     Pause
                                 </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="sechoir-resume-1" onclick="resumeSechoir(1)" style="display: none;">
+                                    Reprendre
+                                </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="sechoir-stop-1" onclick="stopSechoir(1)">
                                     Stop
                                 </button>
@@ -775,6 +790,9 @@ $trsData = calculateCurrentTRS();
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-pause" id="sechoir-pause-2" onclick="pauseSechoir(2)" disabled>
                                     Pause
+                                </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="sechoir-resume-2" onclick="resumeSechoir(2)" style="display: none;">
+                                    Reprendre
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="sechoir-stop-2" onclick="stopSechoir(2)" disabled>
                                     Stop
@@ -871,7 +889,10 @@ $trsData = calculateCurrentTRS();
                                 <button type="button" class="machine-btn machine-btn-pause" id="sechoir-pause-3" onclick="pauseSechoir(3)" disabled>
                                     Pause
                                 </button>
-                                <button type="button" class="machine-btn machine-btn-start" id="sechoir-resume-3" onclick="resumeSechoir(3)">
+                                <button type="button" class="machine-btn machine-btn-start" id="sechoir-resume-3" onclick="resumeSechoir(3)" style="display: none;">
+                                    Reprendre
+                                </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="sechoir-resume-maintenance-3" onclick="resumeAfterMaintenance(3)">
                                     Reprendre après maintenance
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-info" id="sechoir-clean-3" onclick="cleanSechoir(3)" disabled>
@@ -964,6 +985,9 @@ $trsData = calculateCurrentTRS();
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-pause" id="sechoir-pause-4" onclick="pauseSechoir(4)" disabled>
                                     Pause
+                                </button>
+                                <button type="button" class="machine-btn machine-btn-start" id="sechoir-resume-4" onclick="resumeSechoir(4)" style="display: none;">
+                                    Reprendre
                                 </button>
                                 <button type="button" class="machine-btn machine-btn-stop" id="sechoir-stop-4" onclick="stopSechoir(4)" disabled>
                                     Stop

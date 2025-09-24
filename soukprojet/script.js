@@ -199,16 +199,23 @@ function pauseMachine(machineNumber) {
         const stateElement = document.getElementById(`machine-state-${machineNumber}`);
         const indicatorElement = document.getElementById(`status-indicator-${machineNumber}`);
         const pauseButton = document.getElementById(`machine-pause-${machineNumber}`);
+        const resumeButton = document.getElementById(`machine-resume-${machineNumber}`);
         
         if (statusElement) statusElement.className = 'status-display paused';
         if (stateElement) stateElement.textContent = 'En pause';
         if (indicatorElement) indicatorElement.style.color = '#ffc107';
-        if (pauseButton) pauseButton.textContent = '▶️ Reprendre';
+        if (pauseButton) pauseButton.style.display = 'none';
+        if (resumeButton) resumeButton.style.display = 'inline-block';
         
         // Send pause start event to backend
         saveMachinePauseEvent(`Machine ${machineNumber}`, timers[timerKey].pauseStartTime, null, 'Pause opérateur');
-        
-    } else if (timers[timerKey].state === 'paused') {
+    }
+}
+
+function resumeMachine(machineNumber) {
+    const timerKey = `machine${machineNumber}`;
+    
+    if (timers[timerKey].state === 'paused') {
         const resumeTime = new Date();
         
         // End the current pause before resuming
@@ -225,11 +232,13 @@ function pauseMachine(machineNumber) {
         const stateElement = document.getElementById(`machine-state-${machineNumber}`);
         const indicatorElement = document.getElementById(`status-indicator-${machineNumber}`);
         const pauseButton = document.getElementById(`machine-pause-${machineNumber}`);
+        const resumeButton = document.getElementById(`machine-resume-${machineNumber}`);
         
         if (statusElement) statusElement.className = 'status-display running';
         if (stateElement) stateElement.textContent = 'En cours';
         if (indicatorElement) indicatorElement.style.color = '#28a745';
-        if (pauseButton) pauseButton.textContent = '⏸️ Pause';
+        if (pauseButton) pauseButton.style.display = 'inline-block';
+        if (resumeButton) resumeButton.style.display = 'none';
         
         timers[timerKey].interval = setInterval(() => updateMachineTimer(machineNumber), 1000);
     }
@@ -255,9 +264,15 @@ function stopMachine(machineNumber) {
     document.getElementById(`status-indicator-${machineNumber}`).style.color = '#6c757d';
     
     document.getElementById(`machine-start-${machineNumber}`).disabled = false;
-    document.getElementById(`machine-pause-${machineNumber}`).disabled = true;
+    const pauseButton = document.getElementById(`machine-pause-${machineNumber}`);
+    const resumeButton = document.getElementById(`machine-resume-${machineNumber}`);
+    
+    if (pauseButton) {
+        pauseButton.disabled = true;
+        pauseButton.style.display = 'inline-block';
+    }
+    if (resumeButton) resumeButton.style.display = 'none';
     document.getElementById(`machine-stop-${machineNumber}`).disabled = true;
-    document.getElementById(`machine-pause-${machineNumber}`).textContent = '⏸️ Pause';
 }
 
 function updateMachineTimer(machineNumber) {
@@ -489,13 +504,39 @@ function pauseSechoir(sechoirNumber) {
     // Update UI
     const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
     const pauseButton = document.getElementById(`sechoir-pause-${sechoirNumber}`);
+    const resumeButton = document.getElementById(`sechoir-resume-${sechoirNumber}`);
     const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
     const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
     
     if (statusElement) statusElement.textContent = 'En pause';
-    if (pauseButton) pauseButton.textContent = '▶️ Reprendre';
+    if (pauseButton) pauseButton.style.display = 'none';
+    if (resumeButton) resumeButton.style.display = 'inline-block';
     if (statusDot) statusDot.className = 'status-dot paused';
     if (statusText) statusText.textContent = 'En pause';
+}
+
+function resumeSechoir(sechoirNumber) {
+    const timerKey = `sechoir${sechoirNumber}`;
+    
+    if (!timers[timerKey] || timers[timerKey].state !== 'paused') return;
+    
+    timers[timerKey].startTime = new Date();
+    timers[timerKey].state = 'running';
+    
+    // Update UI
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const pauseButton = document.getElementById(`sechoir-pause-${sechoirNumber}`);
+    const resumeButton = document.getElementById(`sechoir-resume-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'En fonctionnement';
+    if (pauseButton) pauseButton.style.display = 'inline-block';
+    if (resumeButton) resumeButton.style.display = 'none';
+    if (statusDot) statusDot.className = 'status-dot running';
+    if (statusText) statusText.textContent = 'En fonctionnement';
+    
+    timers[timerKey].interval = setInterval(() => updateSechoirTimer(sechoirNumber), 1000);
 }
 
 function stopSechoir(sechoirNumber) {
@@ -515,6 +556,7 @@ function stopSechoir(sechoirNumber) {
     const timerElement = document.getElementById(`sechoir-timer-${sechoirNumber}`);
     const startButton = document.getElementById(`sechoir-start-${sechoirNumber}`);
     const pauseButton = document.getElementById(`sechoir-pause-${sechoirNumber}`);
+    const resumeButton = document.getElementById(`sechoir-resume-${sechoirNumber}`);
     const stopButton = document.getElementById(`sechoir-stop-${sechoirNumber}`);
     const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
     const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
@@ -522,13 +564,14 @@ function stopSechoir(sechoirNumber) {
     if (statusElement) statusElement.textContent = 'Arrêté';
     if (timerElement) timerElement.textContent = '00:00:00';
     if (startButton) startButton.disabled = false;
-    if (pauseButton) pauseButton.disabled = true;
+    if (pauseButton) {
+        pauseButton.disabled = true;
+        pauseButton.style.display = 'inline-block';
+    }
+    if (resumeButton) resumeButton.style.display = 'none';
     if (stopButton) stopButton.disabled = true;
     if (statusDot) statusDot.className = 'status-dot';
     if (statusText) statusText.textContent = 'Arrêté';
-    
-    // Reset pause button text
-    if (pauseButton) pauseButton.textContent = '⏸️ Pause';
 }
 
 function cleanSechoir(sechoirNumber) {
@@ -626,13 +669,13 @@ function resumeAfterMaintenance(sechoirNumber) {
     const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
     const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
     const startButton = document.getElementById(`sechoir-start-${sechoirNumber}`);
-    const resumeButton = document.getElementById(`sechoir-resume-${sechoirNumber}`);
+    const resumeMaintenanceButton = document.getElementById(`sechoir-resume-maintenance-${sechoirNumber}`);
     
     if (statusElement) statusElement.textContent = 'Arrêté';
     if (statusDot) statusDot.className = 'status-dot';
     if (statusText) statusText.textContent = 'Arrêté';
     if (startButton) startButton.disabled = false;
-    if (resumeButton) resumeButton.style.display = 'none';
+    if (resumeMaintenanceButton) resumeMaintenanceButton.style.display = 'none';
     
     alert(`Séchoir ${sechoirNumber} prêt pour le fonctionnement normal`);
 }
