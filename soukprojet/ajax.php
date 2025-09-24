@@ -228,6 +228,79 @@ try {
             handleDeleteFilterPreset();
             break;
             
+        case 'save_machine_pause':
+            handleSaveMachinePause();
+            break;
+            
+        case 'get_machine_pauses':
+            handleGetMachinePauses();
+            break;
+            
+        case 'debug_pauses':
+            handleDebugPauses();
+            break;
+            
+        case 'close_all_open_pauses':
+            handleCloseAllOpenPauses();
+            break;
+            
+        // New dashboard handlers
+        case 'get_dashboard_data':
+            handleGetDashboardData();
+            break;
+            
+        case 'get_stop':
+            handleGetStop();
+            break;
+            
+        case 'get_stop_form':
+            handleGetStopForm();
+            break;
+            
+        case 'close_stop':
+            handleCloseStop();
+            break;
+            
+        case 'filter_stops':
+            handleFilterStops();
+            break;
+            
+        case 'get_nc':
+            handleGetNC();
+            break;
+            
+        case 'filter_nc':
+            handleFilterNC();
+            break;
+            
+        case 'save_5m_analysis':
+            handleSave5MAnalysis();
+            break;
+            
+        case 'export_nc':
+            handleExportNC();
+            break;
+            
+        case 'get_trs_data':
+            handleGetTRSData();
+            break;
+            
+        case 'get_stop_details':
+            handleGetStopDetails();
+            break;
+            
+        case 'update_stop':
+            handleUpdateStop();
+            break;
+            
+        case 'get_nc_details':
+            handleGetNCDetails();
+            break;
+            
+        case 'update_nc':
+            handleUpdateNC();
+            break;
+            
         default:
             throw new Exception('Action non reconnue');
     }
@@ -293,69 +366,6 @@ function handleGetDryingPrograms() {
     echo json_encode($result);
 }
 
-function handleSaveMachineProduction() {
-    global $pdo;
-    
-    $machine = sanitize($_POST['machine']);
-    $programId = (int)$_POST['program'];
-    $weight = (float)$_POST['weight'];
-    $operator = sanitize($_POST['operator']);
-    $realDuration = (float)$_POST['real_duration'];
-    
-    // Get program details
-    $stmt = $pdo->prepare("SELECT * FROM machine_programs WHERE id = ?");
-    $stmt->execute([$programId]);
-    $program = $stmt->fetch();
-    
-    if (!$program) {
-        throw new Exception('Programme non trouvé');
-    }
-    
-    $stmt = $pdo->prepare("
-        INSERT INTO productions (type, equipment, operator, weight, program_name, theoretical_duration, real_duration, timestamp)
-        VALUES ('machine', ?, ?, ?, ?, ?, ?, NOW())
-    ");
-    
-    $stmt->execute([
-        "Machine $machine",
-        $operator,
-        $weight,
-        $program['name'],
-        $program['duration_minutes'],
-        $realDuration
-    ]);
-    
-    echo json_encode(['success' => true]);
-}
-
-function handleSaveSechoirProduction() {
-    global $pdo;
-    
-    $sechoir = sanitize($_POST['sechoir']);
-    $articleType = sanitize($_POST['article_type']);
-    $duration = (int)$_POST['duration'];
-    $temperature = (int)$_POST['temperature'];
-    $weight = (float)$_POST['weight'];
-    $operator = sanitize($_POST['operator']);
-    $realDuration = (float)$_POST['real_duration'];
-    
-    $stmt = $pdo->prepare("
-        INSERT INTO productions (type, equipment, operator, weight, theoretical_duration, real_duration, temperature, article_type, timestamp)
-        VALUES ('sechoir', ?, ?, ?, ?, ?, ?, ?, NOW())
-    ");
-    
-    $stmt->execute([
-        "Séchoir $sechoir",
-        $operator,
-        $weight,
-        $duration,
-        $realDuration,
-        $temperature,
-        $articleType
-    ]);
-    
-    echo json_encode(['success' => true]);
-}
 
 function handleSaveCalandreProduction() {
     global $pdo;
@@ -429,8 +439,8 @@ function handleSaveNonConformite() {
     $description = sanitize($_POST['description']);
     
     $stmt = $pdo->prepare("
-        INSERT INTO non_conformities (equipment_type, equipment_name, nc_type, quantity_impacted, comment, created_at)
-        VALUES ('Machine', ?, ?, ?, ?, NOW())
+        INSERT INTO non_conformities (equipment_name, nc_type, quantity_impacted, comment, created_at)
+        VALUES (?, ?, ?, ?, NOW())
     ");
     $stmt->execute([$equipment, $ncType, $quantity, $description]);
     
@@ -1749,10 +1759,8 @@ function handleGetActiveManualSessions() {
 function handleSaveEnhancedArret() {
     global $pdo;
     
-    $equipmentType = sanitize($_POST['equipment_type']);
-    $equipmentName = sanitize($_POST['equipment_name']);
-    $stopCode = sanitize($_POST['stop_code']);
-    $stopType = sanitize($_POST['stop_type']);
+    $equipment = sanitize($_POST['equipment'] ?? $_POST['equipment_name'] ?? '');
+    $reason = sanitize($_POST['reason'] ?? $_POST['stop_code'] ?? '');
     $startTime = $_POST['start_time'];
     $endTime = $_POST['end_time'] ?? null;
     $operator = sanitize($_POST['operator'] ?? '');
@@ -1769,13 +1777,18 @@ function handleSaveEnhancedArret() {
         }
     }
     
-    $stmt = $pdo->prepare("
-        INSERT INTO equipment_stops (equipment_type, equipment_name, stop_code, stop_type, start_time, end_time, duration_minutes, operator, comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->execute([$equipmentType, $equipmentName, $stopCode, $stopType, $startTime, $endTime, $duration, $operator, $comment]);
-    
-    echo json_encode(['success' => true, 'message' => 'Arrêt enregistré avec succès']);
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO equipment_stops (equipment, reason, start_time, end_time, duration_minutes, comment, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([$equipment, $reason, $startTime, $endTime, $duration, $comment]);
+        
+        echo json_encode(['success' => true, 'message' => 'Arrêt enregistré avec succès']);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de l\'enregistrement de l\'arrêt: ' . $e->getMessage());
+    }
 }
 
 function handleGetStopCodes() {
@@ -1832,22 +1845,24 @@ function handleSaveStopCode() {
 function handleSaveEnhancedNC() {
     global $pdo;
     
-    $equipmentType = sanitize($_POST['equipment_type']);
-    $equipmentName = sanitize($_POST['equipment_name']);
-    $programName = sanitize($_POST['program_name'] ?? '');
-    $ncType = sanitize($_POST['nc_type']);
-    $quantityImpacted = (float)($_POST['quantity_impacted'] ?? 0);
-    $weightImpacted = (float)($_POST['weight_impacted'] ?? 0);
+    $equipment = sanitize($_POST['equipment'] ?? $_POST['equipment_name'] ?? '');
+    $ncType = sanitize($_POST['type'] ?? $_POST['nc_type'] ?? '');
+    $quantity = (int)($_POST['quantity'] ?? $_POST['quantity_impacted'] ?? 0);
+    $description = sanitize($_POST['description'] ?? $_POST['comment'] ?? '');
     $operator = sanitize($_POST['operator'] ?? '');
-    $comment = sanitize($_POST['comment'] ?? '');
     
-    $stmt = $pdo->prepare("
-        INSERT INTO non_conformities (equipment_type, equipment_name, program_name, nc_type, quantity_impacted, weight_impacted, operator, comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->execute([$equipmentType, $equipmentName, $programName, $ncType, $quantityImpacted, $weightImpacted, $operator, $comment]);
-    
-    echo json_encode(['success' => true, 'message' => 'Non-conformité enregistrée avec succès']);
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO non_conformities (equipment_name, nc_type, quantity_impacted, comment, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([$equipment, $ncType, $quantity, $description]);
+        
+        echo json_encode(['success' => true, 'message' => 'Non-conformité enregistrée avec succès']);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de l\'enregistrement de la NC: ' . $e->getMessage());
+    }
 }
 
 function handleGetNCTypes() {
@@ -1900,19 +1915,6 @@ function handleSaveNCType() {
     echo json_encode(['success' => true, 'message' => 'Type NC sauvegardé']);
 }
 
-// Operators Management Functions
-function handleGetOperators() {
-    global $pdo;
-    
-    $stmt = $pdo->prepare("SELECT * FROM operators WHERE active = 1 ORDER BY name");
-    $stmt->execute();
-    $operators = $stmt->fetchAll();
-    
-    echo json_encode([
-        'success' => true,
-        'operators' => $operators
-    ]);
-}
 
 function handleSaveOperator() {
     global $pdo;
@@ -2003,5 +2005,1545 @@ function handleDeleteFilterPreset() {
     $stmt->execute([$presetId, $userId]);
     
     echo json_encode(['success' => true, 'message' => 'Preset supprimé']);
+}
+
+// Machine Pause Functions
+function handleSaveMachinePause() {
+    global $pdo;
+    
+    $equipment = sanitize($_POST['equipment']);
+    $pauseStartTime = $_POST['pause_start_time'];
+    $pauseEndTime = $_POST['pause_end_time'] ?? null;
+    $reason = sanitize($_POST['reason'] ?? 'Pause opérateur');
+    
+    try {
+        // Create table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS machine_pauses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            equipment VARCHAR(255) NOT NULL,
+            reason VARCHAR(255) NOT NULL DEFAULT 'Pause opérateur',
+            pause_start_time DATETIME NOT NULL,
+            pause_end_time DATETIME,
+            duration_minutes INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        if ($pauseEndTime) {
+            // This is a pause end - find and update the most recent open pause
+            $end = new DateTime($pauseEndTime);
+            
+            error_log("Attempting to end pause for equipment: {$equipment}");
+            error_log("Pause end time: {$pauseEndTime}");
+            
+            // Find ALL open pauses for this equipment to debug
+            $stmt = $pdo->prepare("
+                SELECT id, pause_start_time, equipment, reason
+                FROM machine_pauses 
+                WHERE equipment = ? 
+                AND pause_end_time IS NULL 
+                ORDER BY pause_start_time DESC
+            ");
+            $stmt->execute([$equipment]);
+            $allOpenPauses = $stmt->fetchAll();
+            
+            error_log("Found " . count($allOpenPauses) . " open pauses for {$equipment}");
+            foreach ($allOpenPauses as $pause) {
+                error_log("Open pause ID: {$pause['id']}, Start: {$pause['pause_start_time']}");
+            }
+            
+            if (!empty($allOpenPauses)) {
+                // Get the most recent one
+                $openPause = $allOpenPauses[0];
+                
+                // Calculate duration from the actual database start time to the end time
+                $actualStart = new DateTime($openPause['pause_start_time']);
+                $duration = $end->diff($actualStart)->h * 60 + $end->diff($actualStart)->i;
+                
+                if ($duration < 0) {
+                    $duration = 1; // Minimum 1 minute if negative
+                }
+                
+                error_log("Updating pause ID: {$openPause['id']} with duration: {$duration} minutes");
+                
+                $stmt = $pdo->prepare("
+                    UPDATE machine_pauses 
+                    SET pause_end_time = ?, duration_minutes = ?
+                    WHERE id = ?
+                ");
+                $result = $stmt->execute([$pauseEndTime, $duration, $openPause['id']]);
+                
+                if ($result) {
+                    error_log("Successfully updated pause record ID: {$openPause['id']}");
+                    $pauseId = $openPause['id'];
+                    
+                    // Verify the update worked
+                    $stmt = $pdo->prepare("SELECT pause_end_time, duration_minutes FROM machine_pauses WHERE id = ?");
+                    $stmt->execute([$openPause['id']]);
+                    $updated = $stmt->fetch();
+                    error_log("Verification - End time: {$updated['pause_end_time']}, Duration: {$updated['duration_minutes']}");
+                } else {
+                    error_log("Failed to update pause record ID: {$openPause['id']}");
+                    $pauseId = null;
+                }
+            } else {
+                // No open pause found, create a new complete record
+                $start = new DateTime($pauseStartTime);
+                $duration = $end->diff($start)->h * 60 + $end->diff($start)->i;
+                
+                if ($duration <= 0) {
+                    $duration = 1; // Minimum 1 minute
+                }
+                
+                error_log("No open pause found, creating new record with duration: {$duration} minutes");
+                
+                $stmt = $pdo->prepare("
+                    INSERT INTO machine_pauses (equipment, reason, pause_start_time, pause_end_time, duration_minutes, created_at)
+                    VALUES (?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([$equipment, $reason, $pauseStartTime, $pauseEndTime, $duration]);
+                $pauseId = $pdo->lastInsertId();
+                
+                error_log("Created new pause record ID: {$pauseId}");
+            }
+        } else {
+            // This is a pause start - insert new record
+            $stmt = $pdo->prepare("
+                INSERT INTO machine_pauses (equipment, reason, pause_start_time, pause_end_time, duration_minutes, created_at)
+                VALUES (?, ?, ?, NULL, 0, NOW())
+            ");
+            $stmt->execute([$equipment, $reason, $pauseStartTime]);
+            $pauseId = $pdo->lastInsertId();
+        }
+        
+        echo json_encode([
+            'success' => true, 
+            'message' => 'Pause enregistrée avec succès',
+            'pause_id' => $pauseId
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de l\'enregistrement de la pause: ' . $e->getMessage());
+    }
+}
+
+function handleGetMachinePauses() {
+    global $pdo;
+    
+    try {
+        // Create table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS machine_pauses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            equipment VARCHAR(255) NOT NULL,
+            reason VARCHAR(255) NOT NULL DEFAULT 'Pause opérateur',
+            pause_start_time DATETIME NOT NULL,
+            pause_end_time DATETIME,
+            duration_minutes INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $stmt = $pdo->prepare("
+            SELECT 
+                DATE(pause_start_time) as date,
+                equipment,
+                reason,
+                CASE 
+                    WHEN duration_minutes > 0 THEN CONCAT(duration_minutes, ' min')
+                    ELSE 'En cours'
+                END as duree,
+                pause_start_time,
+                pause_end_time,
+                duration_minutes
+            FROM machine_pauses 
+            WHERE DATE(pause_start_time) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            ORDER BY pause_start_time DESC 
+            LIMIT 50
+        ");
+        $stmt->execute();
+        $pauses = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'pauses' => $pauses
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la récupération des pauses: ' . $e->getMessage());
+    }
+}
+
+// New Dashboard Functions
+function handleGetDashboardData() {
+    global $pdo;
+    
+    try {
+        // Get current equipment status
+        $sechoirs_html = generateSechoirsDashboard();
+        $finition_html = generateFinitionDashboard();
+        $activities_html = generateRecentActivities();
+        
+        echo json_encode([
+            'success' => true,
+            'sechoirs' => $sechoirs_html,
+            'finition' => $finition_html,
+            'activities' => $activities_html
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors du chargement du dashboard: ' . $e->getMessage());
+    }
+}
+
+function generateSechoirsDashboard() {
+    $sechoirs = [
+        ['id' => 'S1', 'name' => 'Séchoir 1', 'status' => 'running', 'program' => 'Standard 55°C', 'progress' => 65],
+        ['id' => 'S2', 'name' => 'Séchoir 2', 'status' => 'idle', 'program' => null, 'progress' => 0],
+        ['id' => 'S3', 'name' => 'Séchoir 3', 'status' => 'maintenance', 'program' => 'Nettoyage filtre', 'progress' => 85],
+        ['id' => 'S4', 'name' => 'Séchoir 4', 'status' => 'idle', 'program' => null, 'progress' => 0]
+    ];
+    
+    $html = '';
+    foreach ($sechoirs as $sechoir) {
+        $status_class = $sechoir['status'] === 'running' ? 'active' : ($sechoir['status'] === 'maintenance' ? 'maintenance' : 'idle');
+        $status_text = $sechoir['status'] === 'running' ? 'En fonctionnement' : ($sechoir['status'] === 'maintenance' ? 'Maintenance' : 'Arrêt');
+        
+        $html .= '<div class="equipment-card ' . $status_class . '">';
+        $html .= '<div class="equipment-header">';
+        $html .= '<div class="equipment-indicator"></div>';
+        $html .= '<h4>' . $sechoir['name'] . '</h4>';
+        $html .= '<span class="equipment-status">' . $status_text . '</span>';
+        $html .= '</div>';
+        
+        if ($sechoir['program']) {
+            $html .= '<div class="equipment-program">';
+            $html .= '<span>Programme: ' . $sechoir['program'] . '</span>';
+            $html .= '</div>';
+        }
+        
+        $html .= '<div class="equipment-progress">';
+        $html .= '<div class="progress-bar">';
+        $html .= '<div class="progress-fill" style="width: ' . $sechoir['progress'] . '%"></div>';
+        $html .= '</div>';
+        $html .= '<span class="progress-text">' . $sechoir['progress'] . '%</span>';
+        $html .= '</div>';
+        
+        $html .= '<div class="equipment-actions">';
+        if ($sechoir['status'] === 'idle') {
+            $html .= '<button class="btn btn-primary btn-sm">Démarrer</button>';
+        } elseif ($sechoir['status'] === 'running') {
+            $html .= '<button class="btn btn-warning btn-sm">Pause</button>';
+            $html .= '<button class="btn btn-danger btn-sm">Arrêter</button>';
+        }
+        $html .= '<button class="btn btn-info btn-sm">Nettoyage</button>';
+        $html .= '<button class="btn btn-secondary btn-sm">Relance</button>';
+        $html .= '</div>';
+        
+        $html .= '</div>';
+    }
+    
+    return $html;
+}
+
+function generateFinitionDashboard() {
+    $postes = [
+        ['id' => 'CAL1', 'name' => 'Calandre', 'status' => 'running', 'duration' => '00:15:00'],
+        ['id' => 'REP1', 'name' => 'Repassage', 'status' => 'idle', 'duration' => '00:00:00']
+    ];
+    
+    $html = '';
+    foreach ($postes as $poste) {
+        $status_class = $poste['status'] === 'running' ? 'active' : 'idle';
+        $status_text = $poste['status'] === 'running' ? 'Actif' : 'Arrêt';
+        
+        $html .= '<div class="equipment-card ' . $status_class . '">';
+        $html .= '<div class="equipment-header">';
+        $html .= '<div class="equipment-indicator"></div>';
+        $html .= '<h4>' . $poste['name'] . '</h4>';
+        $html .= '<span class="equipment-status">' . $status_text . '</span>';
+        $html .= '</div>';
+        
+        $html .= '<div class="equipment-timer">' . $poste['duration'] . '</div>';
+        
+        $html .= '<div class="equipment-actions">';
+        if ($poste['status'] === 'idle') {
+            $html .= '<button class="btn btn-primary btn-sm">Démarrer</button>';
+        } else {
+            $html .= '<button class="btn btn-warning btn-sm">Pause</button>';
+            $html .= '<button class="btn btn-danger btn-sm">Arrêter</button>';
+        }
+        $html .= '</div>';
+        
+        $html .= '</div>';
+    }
+    
+    return $html;
+}
+
+function generateRecentActivities() {
+    $activities = [
+        ['time' => '14:30', 'equipment' => 'Machine 20', 'action' => 'Démarrage cycle Coton 60°C', 'type' => 'start'],
+        ['time' => '15:10', 'equipment' => 'Séchoir S2', 'action' => 'Cycle terminé - linge prêt', 'type' => 'complete'],
+        ['time' => '16:05', 'equipment' => 'Machine 70', 'action' => 'Maintenance préventive', 'type' => 'maintenance'],
+        ['time' => '16:45', 'equipment' => 'Séchoir S1', 'action' => 'Maintenance filtre terminé', 'type' => 'complete']
+    ];
+    
+    $html = '';
+    foreach ($activities as $activity) {
+        $type_class = $activity['type'] === 'start' ? 'green' : ($activity['type'] === 'maintenance' ? 'orange' : 'blue');
+        
+        $html .= '<div class="activity-item">';
+        $html .= '<span class="activity-time">' . $activity['time'] . '</span>';
+        $html .= '<div class="activity-indicator ' . $type_class . '"></div>';
+        $html .= '<span class="activity-equipment">' . $activity['equipment'] . '</span>';
+        $html .= '<span class="activity-action">' . $activity['action'] . '</span>';
+        $html .= '</div>';
+    }
+    
+    return $html;
+}
+
+// New Stop Management Functions
+function handleGetStop() {
+    global $pdo;
+    
+    $id = (int)$_GET['id'];
+    
+    $stmt = $pdo->prepare("SELECT * FROM equipment_stops WHERE id = ?");
+    $stmt->execute([$id]);
+    $stop = $stmt->fetch();
+    
+    if ($stop) {
+        echo json_encode($stop);
+    } else {
+        throw new Exception('Arrêt non trouvé');
+    }
+}
+
+function handleGetStopForm() {
+    $id = (int)$_GET['id'];
+    
+    // Generate edit form HTML for the stop
+    $html = '<div class="form-group">';
+    $html .= '<label>Équipement</label>';
+    $html .= '<input type="text" id="edit-equipment" value="Machine 20" readonly>';
+    $html .= '</div>';
+    $html .= '<div class="form-group">';
+    $html .= '<label>Motif</label>';
+    $html .= '<select id="edit-reason">';
+    $html .= '<option value="panne-mecanique">Panne mécanique</option>';
+    $html .= '<option value="maintenance">Maintenance</option>';
+    $html .= '</select>';
+    $html .= '</div>';
+    $html .= '<div class="btn-group">';
+    $html .= '<button class="btn btn-primary" onclick="saveStopEdit(' . $id . ')">Sauvegarder</button>';
+    $html .= '</div>';
+    
+    echo $html;
+}
+
+function handleCloseStop() {
+    global $pdo;
+    
+    $id = (int)$_POST['id'];
+    $endTime = $_POST['end_time'];
+    
+    try {
+        // Get the stop to calculate duration
+        $stmt = $pdo->prepare("SELECT start_time FROM equipment_stops WHERE id = ?");
+        $stmt->execute([$id]);
+        $stop = $stmt->fetch();
+        
+        if ($stop) {
+            $start = new DateTime($stop['start_time']);
+            $end = new DateTime($endTime);
+            $duration = $end->diff($start)->h * 60 + $end->diff($start)->i;
+            
+            $stmt = $pdo->prepare("
+                UPDATE equipment_stops 
+                SET end_time = ?, duration_minutes = ? 
+                WHERE id = ?
+            ");
+            $stmt->execute([$endTime, $duration, $id]);
+            
+            echo json_encode(['success' => true]);
+        } else {
+            throw new Exception('Arrêt non trouvé');
+        }
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la clôture: ' . $e->getMessage());
+    }
+}
+
+function handleFilterStops() {
+    global $pdo;
+    
+    $equipment = $_GET['equipment'] ?? '';
+    $type = $_GET['type'] ?? '';
+    $dateStart = $_GET['date_start'] ?? '';
+    $dateEnd = $_GET['date_end'] ?? '';
+    
+    $whereConditions = [];
+    $params = [];
+    
+    if (!empty($equipment)) {
+        $whereConditions[] = "equipment_name = ?";
+        $params[] = $equipment;
+    }
+    
+    if (!empty($type)) {
+        $whereConditions[] = "stop_type = ?";
+        $params[] = $type;
+    }
+    
+    if (!empty($dateStart)) {
+        $whereConditions[] = "DATE(start_time) >= ?";
+        $params[] = $dateStart;
+    }
+    
+    if (!empty($dateEnd)) {
+        $whereConditions[] = "DATE(start_time) <= ?";
+        $params[] = $dateEnd;
+    }
+    
+    $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
+    
+    $stmt = $pdo->prepare("
+        SELECT *, 
+               CASE 
+                   WHEN end_time IS NULL THEN 'En cours'
+                   ELSE 'Terminé'
+               END as status
+        FROM equipment_stops 
+        $whereClause
+        ORDER BY start_time DESC 
+        LIMIT 50
+    ");
+    $stmt->execute($params);
+    $stops = $stmt->fetchAll();
+    
+    $html = '';
+    foreach ($stops as $stop) {
+        $html .= '<tr>';
+        $html .= '<td><strong>' . htmlspecialchars($stop['equipment_name']) . '</strong></td>';
+        $html .= '<td><span class="badge ' . ($stop['stop_type'] === 'planifie' ? 'badge-success' : 'badge-danger') . '">' . ucfirst($stop['stop_type']) . '</span></td>';
+        $html .= '<td>' . htmlspecialchars($stop['stop_code']) . '</td>';
+        $html .= '<td>' . date('d/m/Y H:i', strtotime($stop['start_time'])) . '</td>';
+        $html .= '<td>' . ($stop['duration_minutes'] ? $stop['duration_minutes'] . ' min' : '<span class="status-ongoing">En cours</span>') . '</td>';
+        $html .= '<td><span class="badge ' . ($stop['status'] === 'Terminé' ? 'badge-success' : 'badge-warning') . '">' . $stop['status'] . '</span></td>';
+        $html .= '<td>';
+        $html .= '<div class="action-buttons">';
+        $html .= '<button class="btn-icon" onclick="viewStop(' . $stop['id'] . ')" title="Voir">👁️</button>';
+        $html .= '<button class="btn-icon" onclick="editStop(' . $stop['id'] . ')" title="Modifier">✏️</button>';
+        if ($stop['status'] === 'En cours') {
+            $html .= '<button class="btn-icon success" onclick="closeStop(' . $stop['id'] . ')" title="Clôturer">✅</button>';
+        }
+        $html .= '</div>';
+        $html .= '</td>';
+        $html .= '</tr>';
+    }
+    
+    echo $html;
+}
+
+// New NC Management Functions
+function handleGetNC() {
+    global $pdo;
+    
+    $id = (int)$_GET['id'];
+    
+    $stmt = $pdo->prepare("
+        SELECT nc.*, nt.severity, nt.category 
+        FROM non_conformities nc
+        LEFT JOIN nc_types nt ON nc.nc_type = nt.code
+        WHERE nc.id = ?
+    ");
+    $stmt->execute([$id]);
+    $nc = $stmt->fetch();
+    
+    if ($nc) {
+        echo json_encode($nc);
+    } else {
+        throw new Exception('Non-conformité non trouvée');
+    }
+}
+
+function handleFilterNC() {
+    global $pdo;
+    
+    $equipment = $_GET['equipment'] ?? '';
+    $type = $_GET['type'] ?? '';
+    $severity = $_GET['severity'] ?? '';
+    $dateStart = $_GET['date_start'] ?? '';
+    $dateEnd = $_GET['date_end'] ?? '';
+    
+    $whereConditions = [];
+    $params = [];
+    
+    if (!empty($equipment)) {
+        $whereConditions[] = "nc.equipment_name = ?";
+        $params[] = $equipment;
+    }
+    
+    if (!empty($type)) {
+        $whereConditions[] = "nc.nc_type = ?";
+        $params[] = $type;
+    }
+    
+    if (!empty($severity)) {
+        $whereConditions[] = "nt.severity = ?";
+        $params[] = $severity;
+    }
+    
+    if (!empty($dateStart)) {
+        $whereConditions[] = "DATE(nc.created_at) >= ?";
+        $params[] = $dateStart;
+    }
+    
+    if (!empty($dateEnd)) {
+        $whereConditions[] = "DATE(nc.created_at) <= ?";
+        $params[] = $dateEnd;
+    }
+    
+    $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
+    
+    $stmt = $pdo->prepare("
+        SELECT nc.*, nt.severity, nt.category 
+        FROM non_conformities nc
+        LEFT JOIN nc_types nt ON nc.nc_type = nt.code
+        $whereClause
+        ORDER BY nc.created_at DESC 
+        LIMIT 50
+    ");
+    $stmt->execute($params);
+    $ncs = $stmt->fetchAll();
+    
+    $html = '';
+    foreach ($ncs as $nc) {
+        $severity_class = $nc['severity'] === 'critique' ? 'badge-danger' : 
+                         ($nc['severity'] === 'majeure' ? 'badge-warning' : 'badge-secondary');
+        
+        $html .= '<tr>';
+        $html .= '<td>';
+        $html .= '<div class="nc-type-info">';
+        $html .= '<span class="badge badge-info">' . htmlspecialchars($nc['nc_type']) . '</span>';
+        $html .= '<span class="badge ' . $severity_class . '">' . ucfirst($nc['severity'] ?? 'mineure') . '</span>';
+        $html .= '</div>';
+        $html .= '</td>';
+        $html .= '<td>';
+        $html .= '<div class="nc-description">' . htmlspecialchars(substr($nc['comment'], 0, 50));
+        if (strlen($nc['comment']) > 50) $html .= '...';
+        $html .= '</div>';
+        $html .= '</td>';
+        $html .= '<td>' . htmlspecialchars($nc['equipment_name']) . '</td>';
+        $html .= '<td>' . ($nc['quantity_impacted'] ?? '-') . '</td>';
+        $html .= '<td>' . number_format($nc['weight_impacted'] ?? 0, 1) . '</td>';
+        $html .= '<td>' . date('d/m/Y H:i', strtotime($nc['created_at'])) . '</td>';
+        $html .= '<td>' . htmlspecialchars($nc['operator'] ?? 'N/A') . '</td>';
+        $html .= '<td>';
+        $html .= '<div class="action-buttons">';
+        $html .= '<button class="btn-icon" onclick="viewNC(' . $nc['id'] . ')" title="Voir">👁️</button>';
+        $html .= '<button class="btn-icon" onclick="editNC(' . $nc['id'] . ')" title="Modifier">✏️</button>';
+        $html .= '<button class="btn-icon" onclick="analyzeNC(' . $nc['id'] . ')" title="Analyser 5M">🔍</button>';
+        $html .= '</div>';
+        $html .= '</td>';
+        $html .= '</tr>';
+    }
+    
+    echo $html;
+}
+
+function handleSave5MAnalysis() {
+    global $pdo;
+    
+    $ncId = (int)$_POST['nc_id'];
+    $causes = json_decode($_POST['causes'], true);
+    $comment = sanitize($_POST['comment']);
+    
+    try {
+        // Create analysis table if it doesn't exist
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS nc_5m_analysis (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nc_id INT NOT NULL,
+                causes_json TEXT NOT NULL,
+                corrective_actions TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (nc_id) REFERENCES non_conformities(id) ON DELETE CASCADE
+            )
+        ");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO nc_5m_analysis (nc_id, causes_json, corrective_actions)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+            causes_json = VALUES(causes_json),
+            corrective_actions = VALUES(corrective_actions)
+        ");
+        $stmt->execute([$ncId, json_encode($causes), $comment]);
+        
+        echo json_encode(['success' => true]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la sauvegarde de l\'analyse: ' . $e->getMessage());
+    }
+}
+
+function handleExportNC() {
+    global $pdo;
+    
+    $equipment = $_GET['equipment'] ?? '';
+    $type = $_GET['type'] ?? '';
+    $severity = $_GET['severity'] ?? '';
+    $dateStart = $_GET['date_start'] ?? '';
+    $dateEnd = $_GET['date_end'] ?? '';
+    
+    $whereConditions = [];
+    $params = [];
+    
+    if (!empty($equipment)) {
+        $whereConditions[] = "nc.equipment_name = ?";
+        $params[] = $equipment;
+    }
+    
+    if (!empty($type)) {
+        $whereConditions[] = "nc.nc_type = ?";
+        $params[] = $type;
+    }
+    
+    if (!empty($severity)) {
+        $whereConditions[] = "nt.severity = ?";
+        $params[] = $severity;
+    }
+    
+    if (!empty($dateStart)) {
+        $whereConditions[] = "DATE(nc.created_at) >= ?";
+        $params[] = $dateStart;
+    }
+    
+    if (!empty($dateEnd)) {
+        $whereConditions[] = "DATE(nc.created_at) <= ?";
+        $params[] = $dateEnd;
+    }
+    
+    $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
+    
+    $stmt = $pdo->prepare("
+        SELECT nc.*, nt.severity, nt.category 
+        FROM non_conformities nc
+        LEFT JOIN nc_types nt ON nc.nc_type = nt.code
+        $whereClause
+        ORDER BY nc.created_at DESC
+    ");
+    $stmt->execute($params);
+    $ncs = $stmt->fetchAll();
+    
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=export_nc_' . date('Y-m-d') . '.csv');
+    
+    // Output CSV
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['Type', 'Gravité', 'Description', 'Équipement', 'Quantité', 'Poids (kg)', 'Date', 'Opérateur']);
+    
+    foreach ($ncs as $nc) {
+        fputcsv($output, [
+            $nc['nc_type'],
+            $nc['severity'] ?? 'mineure',
+            $nc['comment'],
+            $nc['equipment_name'],
+            $nc['quantity_impacted'] ?? '',
+            $nc['weight_impacted'] ?? '',
+            $nc['created_at'],
+            $nc['operator'] ?? ''
+        ]);
+    }
+    
+    fclose($output);
+    exit;
+}
+
+// Utility functions for missing handlers
+function handleDebugPauses() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT * FROM machine_pauses 
+            WHERE pause_end_time IS NULL 
+            ORDER BY pause_start_time DESC
+        ");
+        $stmt->execute();
+        $openPauses = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'open_pauses' => $openPauses,
+            'count' => count($openPauses)
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors du debug: ' . $e->getMessage());
+    }
+}
+
+function handleCloseAllOpenPauses() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE machine_pauses 
+            SET pause_end_time = NOW(), 
+                duration_minutes = TIMESTAMPDIFF(MINUTE, pause_start_time, NOW())
+            WHERE pause_end_time IS NULL
+        ");
+        $stmt->execute();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Toutes les pauses ouvertes ont été fermées'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la fermeture: ' . $e->getMessage());
+    }
+}
+
+// Settings management functions for dashboard
+function handleAddProgram() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $name = sanitize($_POST['name']);
+    $duration = (int)$_POST['duration'];
+    $temperature = (int)$_POST['temperature'];
+    $rate = (float)$_POST['rate'];
+    $equipmentType = sanitize($_POST['equipmentType'] ?? 'LAVAGE');
+    
+    try {
+        // Create programs table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS programs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            equipment_type ENUM('LAVAGE', 'SECHAGE') NOT NULL DEFAULT 'LAVAGE',
+            duration_minutes INT NOT NULL,
+            temperature_c INT,
+            nominal_rate_kg_h FLOAT,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO programs (name, equipment_type, duration_minutes, temperature_c, nominal_rate_kg_h)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$name, $equipmentType, $duration, $temperature, $rate]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Programme créé avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la création du programme: ' . $e->getMessage());
+    }
+}
+
+function handleAddOperator() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $firstName = sanitize($_POST['firstName']);
+    $lastName = sanitize($_POST['lastName']);
+    $login = sanitize($_POST['login']);
+    $role = sanitize($_POST['role']);
+    
+    if (!in_array($role, ['OPERATEUR', 'CHEF_ATELIER', 'ADMIN'])) {
+        throw new Exception('Rôle invalide');
+    }
+    
+    try {
+        // Create operators table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS operators_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            first_name VARCHAR(255) NOT NULL,
+            last_name VARCHAR(255) NOT NULL,
+            login VARCHAR(100) UNIQUE NOT NULL,
+            role ENUM('OPERATEUR', 'CHEF_ATELIER', 'ADMIN') NOT NULL,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO operators_config (first_name, last_name, login, role)
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([$firstName, $lastName, $login, $role]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Opérateur créé avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+            throw new Exception('Ce login existe déjà');
+        }
+        throw new Exception('Erreur lors de la création de l\'opérateur: ' . $e->getMessage());
+    }
+}
+
+function handleAddMotif() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $code = sanitize($_POST['code']);
+    $description = sanitize($_POST['description']);
+    $type = sanitize($_POST['type']);
+    $category = sanitize($_POST['category']);
+    
+    if (!in_array($type, ['NON_PLANIFIE', 'PLANIFIE', 'INTER_CYCLE', 'NETTOYAGE'])) {
+        throw new Exception('Type d\'arrêt invalide');
+    }
+    
+    if (!in_array($category, ['MECANIQUE', 'ELECTRIQUE', 'ORGANISATION', 'QUALITE', 'SECURITE', 'AUTRE'])) {
+        throw new Exception('Catégorie invalide');
+    }
+    
+    try {
+        // Create stop_motifs table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS stop_motifs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            code VARCHAR(50) UNIQUE NOT NULL,
+            description VARCHAR(255) NOT NULL,
+            stop_type ENUM('NON_PLANIFIE', 'PLANIFIE', 'INTER_CYCLE', 'NETTOYAGE') NOT NULL,
+            category ENUM('MECANIQUE', 'ELECTRIQUE', 'ORGANISATION', 'QUALITE', 'SECURITE', 'AUTRE') NOT NULL,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO stop_motifs (code, description, stop_type, category)
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([$code, $description, $type, $category]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Motif d\'arrêt créé avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+            throw new Exception('Ce code motif existe déjà');
+        }
+        throw new Exception('Erreur lors de la création du motif: ' . $e->getMessage());
+    }
+}
+
+function handleAddTypeNC() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $code = sanitize($_POST['code']);
+    $description = sanitize($_POST['description']);
+    $severity = sanitize($_POST['severity']);
+    
+    if (!in_array($severity, ['MINEURE', 'MAJEURE', 'CRITIQUE'])) {
+        throw new Exception('Gravité invalide');
+    }
+    
+    try {
+        // Create nc_types_config table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS nc_types_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            code VARCHAR(50) UNIQUE NOT NULL,
+            description VARCHAR(255) NOT NULL,
+            severity ENUM('MINEURE', 'MAJEURE', 'CRITIQUE') NOT NULL,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO nc_types_config (code, description, severity)
+            VALUES (?, ?, ?)
+        ");
+        $stmt->execute([$code, $description, $severity]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Type de non-conformité créé avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+            throw new Exception('Ce code type NC existe déjà');
+        }
+        throw new Exception('Erreur lors de la création du type NC: ' . $e->getMessage());
+    }
+}
+
+function handleAddCause5M() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $axe = sanitize($_POST['axe']);
+    $description = sanitize($_POST['description']);
+    
+    if (!in_array($axe, ['mainOeuvre', 'methode', 'matiere', 'milieu', 'machine'])) {
+        throw new Exception('Axe 5M invalide');
+    }
+    
+    try {
+        // Create causes_5m table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS causes_5m (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            axe ENUM('mainOeuvre', 'methode', 'matiere', 'milieu', 'machine') NOT NULL,
+            description VARCHAR(255) NOT NULL,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO causes_5m (axe, description)
+            VALUES (?, ?)
+        ");
+        $stmt->execute([$axe, $description]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cause 5M créée avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la création de la cause 5M: ' . $e->getMessage());
+    }
+}
+
+
+function handleAddManualProduction() {
+    global $pdo;
+    
+    $stationType = sanitize($_POST['station_type']);
+    $designation = sanitize($_POST['designation'] ?? '');
+    $articles = (int)($_POST['articles'] ?? 0);
+    $pieces = (int)($_POST['pieces'] ?? 0);
+    $operator = sanitize($_POST['operator'] ?? 'Jean Dupont');
+    $comment = sanitize($_POST['comment'] ?? '');
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO productions (
+                type, equipment, program_name, pieces, 
+                operator, comment, timestamp
+            )
+            VALUES ('manual', ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([
+            $stationType,
+            $designation,
+            $pieces,
+            $operator,
+            $comment
+        ]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Production ' . $stationType . ' enregistrée avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de l\'enregistrement: ' . $e->getMessage());
+    }
+}
+
+// Handlers pour l'édition et suppression des réglages
+function handleEditProgram() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    $name = sanitize($_POST['name']);
+    $duration = (int)$_POST['duration'];
+    $temperature = (int)$_POST['temperature'];
+    $rate = (float)$_POST['rate'];
+    $equipmentType = sanitize($_POST['equipmentType'] ?? 'LAVAGE');
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE programs 
+            SET name = ?, duration_minutes = ?, temperature_c = ?, nominal_rate_kg_h = ?, equipment_type = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$name, $duration, $temperature, $rate, $equipmentType, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Programme modifié avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
+}
+
+function handleDeleteProgram() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM programs WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Programme supprimé avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la suppression: ' . $e->getMessage());
+    }
+}
+
+function handleEditOperator() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    $firstName = sanitize($_POST['firstName']);
+    $lastName = sanitize($_POST['lastName']);
+    $login = sanitize($_POST['login']);
+    $role = sanitize($_POST['role']);
+    
+    if (!in_array($role, ['OPERATEUR', 'CHEF_ATELIER', 'ADMIN'])) {
+        throw new Exception('Rôle invalide');
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE operators_config 
+            SET first_name = ?, last_name = ?, login = ?, role = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$firstName, $lastName, $login, $role, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Opérateur modifié avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+            throw new Exception('Ce login existe déjà');
+        }
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
+}
+
+function handleDeleteOperator() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM operators_config WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Opérateur supprimé avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la suppression: ' . $e->getMessage());
+    }
+}
+
+function handleResetPassword() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    $newPassword = 'temp123'; // Mot de passe temporaire
+    $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE operators_config 
+            SET password_hash = ?, updated_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$hashedPassword, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Mot de passe réinitialisé. Nouveau mot de passe: ' . $newPassword
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la réinitialisation: ' . $e->getMessage());
+    }
+}
+
+function handleEditMotif() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    $code = sanitize($_POST['code']);
+    $description = sanitize($_POST['description']);
+    $type = sanitize($_POST['type']);
+    $category = sanitize($_POST['category']);
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE stop_motifs 
+            SET code = ?, description = ?, stop_type = ?, category = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$code, $description, $type, $category, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Motif d\'arrêt modifié avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
+}
+
+function handleDeleteMotif() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM stop_motifs WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Motif d\'arrêt supprimé avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la suppression: ' . $e->getMessage());
+    }
+}
+
+function handleEditTypeNC() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    $code = sanitize($_POST['code']);
+    $description = sanitize($_POST['description']);
+    $severity = sanitize($_POST['severity']);
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE nc_types_config 
+            SET code = ?, description = ?, severity = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$code, $description, $severity, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Type NC modifié avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
+}
+
+function handleDeleteTypeNC() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM nc_types_config WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Type NC supprimé avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la suppression: ' . $e->getMessage());
+    }
+}
+
+function handleEditCause5M() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    $description = sanitize($_POST['description']);
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE causes_5m 
+            SET description = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$description, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cause 5M modifiée avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
+}
+
+function handleDeleteCause5M() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        throw new Exception('Non autorisé');
+    }
+    
+    $id = (int)$_POST['id'];
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM causes_5m WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cause 5M supprimée avec succès'
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la suppression: ' . $e->getMessage());
+    }
+}
+
+function handleGetPrograms() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM programs WHERE active = 1 ORDER BY name");
+        $programs = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'programs' => $programs
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors du chargement: ' . $e->getMessage());
+    }
+}
+
+
+function handleGetMotifs() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM stop_motifs WHERE active = 1 ORDER BY code");
+        $motifs = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'motifs' => $motifs
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors du chargement: ' . $e->getMessage());
+    }
+}
+
+function handleGetTypesNC() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM nc_types_config WHERE active = 1 ORDER BY code");
+        $types = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'types' => $types
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors du chargement: ' . $e->getMessage());
+    }
+}
+
+function handleGetCauses5M() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM causes_5m WHERE active = 1 ORDER BY axe, description");
+        $causes = $stmt->fetchAll();
+        
+        $result = [
+            'mainOeuvre' => [],
+            'methode' => [],
+            'matiere' => [],
+            'milieu' => [],
+            'machine' => []
+        ];
+        
+        foreach ($causes as $cause) {
+            $result[$cause['axe']][] = $cause;
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'causes' => $result
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors du chargement: ' . $e->getMessage());
+    }
+}
+
+function handleSaveMachineProduction() {
+    global $pdo;
+    
+    $machine = sanitize($_POST['machine']);
+    $program = sanitize($_POST['program'] ?? '');
+    $weight = (float)($_POST['weight'] ?? 0);
+    $batch = sanitize($_POST['batch'] ?? '');
+    $client = sanitize($_POST['client'] ?? '');
+    $comment = sanitize($_POST['comment'] ?? '');
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO productions (
+                type, equipment, program_name, weight, batch_code, client, 
+                operator, comment, timestamp
+            )
+            VALUES ('machine', ?, ?, ?, ?, ?, 'Jean Dupont', ?, NOW())
+        ");
+        $stmt->execute([
+            "Machine $machine kg",
+            $program,
+            $weight,
+            $batch,
+            $client,
+            $comment
+        ]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Production machine enregistrée avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de l\'enregistrement: ' . $e->getMessage());
+    }
+}
+
+function handleSaveSechoirProduction() {
+    global $pdo;
+    
+    $sechoir = sanitize($_POST['sechoir']);
+    $program = sanitize($_POST['program'] ?? '');
+    $temperature = (int)($_POST['temperature'] ?? 0);
+    $batch = sanitize($_POST['batch'] ?? '');
+    $client = sanitize($_POST['client'] ?? '');
+    $comment = sanitize($_POST['comment'] ?? '');
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO productions (
+                type, equipment, program_name, temperature, batch_code, client, 
+                operator, comment, timestamp
+            )
+            VALUES ('sechoir', ?, ?, ?, ?, ?, 'Jean Dupont', ?, NOW())
+        ");
+        $stmt->execute([
+            "Séchoir $sechoir",
+            $program,
+            $temperature,
+            $batch,
+            $client,
+            $comment
+        ]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Production séchoir enregistrée avec succès',
+            'id' => $pdo->lastInsertId()
+        ]);
+        
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de l\'enregistrement: ' . $e->getMessage());
+    }
+}
+
+// View/Edit handlers for stops and NC
+function handleGetStopDetails() {
+    global $pdo;
+    
+    $id = (int)$_GET['id'];
+    
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM equipment_stops WHERE id = ?");
+        $stmt->execute([$id]);
+        $stop = $stmt->fetch();
+        
+        if ($stop) {
+            echo json_encode([
+                'success' => true,
+                'stop' => $stop
+            ]);
+        } else {
+            throw new Exception('Arrêt non trouvé');
+        }
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la récupération: ' . $e->getMessage());
+    }
+}
+
+function handleUpdateStop() {
+    global $pdo;
+    
+    $id = (int)$_POST['id'];
+    $equipment = sanitize($_POST['equipment']);
+    $reason = sanitize($_POST['reason']);
+    $startTime = $_POST['start_time'];
+    $endTime = $_POST['end_time'] ?? null;
+    $comment = sanitize($_POST['comment'] ?? '');
+    
+    // Calculer la durée si end_time est fourni
+    $duration = null;
+    if ($startTime && $endTime) {
+        $start = new DateTime($startTime);
+        $end = new DateTime($endTime);
+        $diff = $end->diff($start);
+        $duration = $diff->i + ($diff->h * 60) + ($diff->d * 24 * 60);
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE equipment_stops 
+            SET equipment = ?, reason = ?, start_time = ?, end_time = ?, 
+                duration_minutes = ?, comment = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$equipment, $reason, $startTime, $endTime, $duration, $comment, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Arrêt modifié avec succès'
+        ]);
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
+}
+
+function handleGetNCDetails() {
+    global $pdo;
+    
+    $id = (int)$_GET['id'];
+    
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM non_conformities WHERE id = ?");
+        $stmt->execute([$id]);
+        $nc = $stmt->fetch();
+        
+        if ($nc) {
+            echo json_encode([
+                'success' => true,
+                'nc' => $nc
+            ]);
+        } else {
+            throw new Exception('Non-conformité non trouvée');
+        }
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la récupération: ' . $e->getMessage());
+    }
+}
+
+function handleUpdateNC() {
+    global $pdo;
+    
+    $id = (int)$_POST['id'];
+    $equipmentName = sanitize($_POST['equipment_name']);
+    $ncType = sanitize($_POST['nc_type']);
+    $quantityImpacted = (int)($_POST['quantity_impacted'] ?? 0);
+    $comment = sanitize($_POST['comment']);
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE non_conformities 
+            SET equipment_name = ?, nc_type = ?, quantity_impacted = ?, comment = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$equipmentName, $ncType, $quantityImpacted, $comment, $id]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Non-conformité modifiée avec succès'
+        ]);
+    } catch (Exception $e) {
+        throw new Exception('Erreur lors de la modification: ' . $e->getMessage());
+    }
 }
 ?>

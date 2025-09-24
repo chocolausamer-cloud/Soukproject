@@ -188,22 +188,48 @@ function pauseMachine(machineNumber) {
     const timerKey = `machine${machineNumber}`;
     
     if (timers[timerKey].state === 'running') {
+        // Save pause start time for logging
+        timers[timerKey].pauseStartTime = new Date();
         timers[timerKey].pausedTime += Date.now() - timers[timerKey].startTime.getTime();
         timers[timerKey].state = 'paused';
         clearInterval(timers[timerKey].interval);
         
-        document.getElementById(`machine-status-${machineNumber}`).className = 'status-display paused';
-        document.getElementById(`machine-state-${machineNumber}`).textContent = 'En pause';
-        document.getElementById(`status-indicator-${machineNumber}`).style.color = '#ffc107';
-        document.getElementById(`machine-pause-${machineNumber}`).textContent = '▶️ Reprendre';
+        // Update UI
+        const statusElement = document.getElementById(`machine-status-${machineNumber}`);
+        const stateElement = document.getElementById(`machine-state-${machineNumber}`);
+        const indicatorElement = document.getElementById(`status-indicator-${machineNumber}`);
+        const pauseButton = document.getElementById(`machine-pause-${machineNumber}`);
+        
+        if (statusElement) statusElement.className = 'status-display paused';
+        if (stateElement) stateElement.textContent = 'En pause';
+        if (indicatorElement) indicatorElement.style.color = '#ffc107';
+        if (pauseButton) pauseButton.textContent = '▶️ Reprendre';
+        
+        // Send pause start event to backend
+        saveMachinePauseEvent(`Machine ${machineNumber}`, timers[timerKey].pauseStartTime, null, 'Pause opérateur');
+        
     } else if (timers[timerKey].state === 'paused') {
-        timers[timerKey].startTime = new Date();
+        const resumeTime = new Date();
+        
+        // End the current pause before resuming
+        if (timers[timerKey].pauseStartTime) {
+            saveMachinePauseEvent(`Machine ${machineNumber}`, timers[timerKey].pauseStartTime, resumeTime, 'Pause opérateur');
+            timers[timerKey].pauseStartTime = null; // Reset pause start time
+        }
+        
+        timers[timerKey].startTime = resumeTime;
         timers[timerKey].state = 'running';
         
-        document.getElementById(`machine-status-${machineNumber}`).className = 'status-display running';
-        document.getElementById(`machine-state-${machineNumber}`).textContent = 'En cours';
-        document.getElementById(`status-indicator-${machineNumber}`).style.color = '#28a745';
-        document.getElementById(`machine-pause-${machineNumber}`).textContent = '⏸️ Pause';
+        // Update UI
+        const statusElement = document.getElementById(`machine-status-${machineNumber}`);
+        const stateElement = document.getElementById(`machine-state-${machineNumber}`);
+        const indicatorElement = document.getElementById(`status-indicator-${machineNumber}`);
+        const pauseButton = document.getElementById(`machine-pause-${machineNumber}`);
+        
+        if (statusElement) statusElement.className = 'status-display running';
+        if (stateElement) stateElement.textContent = 'En cours';
+        if (indicatorElement) indicatorElement.style.color = '#28a745';
+        if (pauseButton) pauseButton.textContent = '⏸️ Pause';
         
         timers[timerKey].interval = setInterval(() => updateMachineTimer(machineNumber), 1000);
     }
@@ -211,6 +237,13 @@ function pauseMachine(machineNumber) {
 
 function stopMachine(machineNumber) {
     const timerKey = `machine${machineNumber}`;
+    
+    // If machine was paused, end the pause before stopping
+    if (timers[timerKey].state === 'paused' && timers[timerKey].pauseStartTime) {
+        const stopTime = new Date();
+        saveMachinePauseEvent(`Machine ${machineNumber}`, timers[timerKey].pauseStartTime, stopTime, 'Pause opérateur');
+        timers[timerKey].pauseStartTime = null;
+    }
     
     if (timers[timerKey].interval) {
         clearInterval(timers[timerKey].interval);
@@ -243,11 +276,19 @@ function updateMachineTimer(machineNumber) {
 async function saveMachineProduction(event, machineNumber) {
     event.preventDefault();
     
+    const timerKey = `machine${machineNumber}`;
+    
+    // If machine was paused, end the pause before saving
+    if (timers[timerKey].state === 'paused' && timers[timerKey].pauseStartTime) {
+        const saveTime = new Date();
+        saveMachinePauseEvent(`Machine ${machineNumber}`, timers[timerKey].pauseStartTime, saveTime, 'Pause opérateur');
+        timers[timerKey].pauseStartTime = null;
+    }
+    
     const formData = new FormData(event.target);
     formData.append('action', 'save_machine_production');
     
     // Add timer data
-    const timerKey = `machine${machineNumber}`;
     const realDuration = timers[timerKey].pausedTime / 60000 + 
         (timers[timerKey].startTime ? (Date.now() - timers[timerKey].startTime.getTime()) / 60000 : 0);
     formData.append('real_duration', realDuration);
@@ -282,6 +323,68 @@ function resetMachineTimer(machineNumber) {
     timers[timerKey].startTime = null;
     document.getElementById(`machine-timer-${machineNumber}`).textContent = '00:00:00';
     stopMachine(machineNumber);
+}
+
+function relanceMachine(machineNumber) {
+    const weight = document.getElementById(`machine-weight-${machineNumber}`).value;
+    
+    if (!weight) {
+        alert('Veuillez saisir le poids avant de relancer la machine');
+        return;
+    }
+    
+    // Show relance modal or use default values
+    const relanceTemp = prompt('Température de relance (°C):', '55');
+    const relanceDuration = prompt('Durée de relance (minutes):', '30');
+    
+    if (relanceTemp === null || relanceDuration === null) {
+        return; // User cancelled
+    }
+    
+    const temp = parseInt(relanceTemp) || 55;
+    const duration = parseInt(relanceDuration) || 30;
+    
+    if (temp < 30 || temp > 90) {
+        alert('Température doit être entre 30°C et 90°C');
+        return;
+    }
+    
+    if (duration < 5 || duration > 120) {
+        alert('Durée doit être entre 5 et 120 minutes');
+        return;
+    }
+    
+    // Start relance cycle
+    const timerKey = `machine${machineNumber}`;
+    timers[timerKey].startTime = new Date();
+    timers[timerKey].state = 'running';
+    timers[timerKey].relanceMode = true;
+    timers[timerKey].relanceTemp = temp;
+    timers[timerKey].relanceDuration = duration;
+    
+    // Update UI
+    document.getElementById(`machine-status-${machineNumber}`).className = 'status-display running';
+    document.getElementById(`machine-state-${machineNumber}`).textContent = `Relance ${temp}°C`;
+    document.getElementById(`status-indicator-${machineNumber}`).style.color = '#ff8c00';
+    
+    // Update cycle info
+    const cycleInfo = document.getElementById(`machine-cycle-info-${machineNumber}`);
+    if (cycleInfo) {
+        cycleInfo.style.display = 'block';
+        cycleInfo.innerHTML = `
+            <div class="cycle-program">Relance ${temp}°C</div>
+            <div class="cycle-weight">${weight} kg</div>
+            <div class="cycle-duration">Durée: ${duration} min</div>
+        `;
+    }
+    
+    document.getElementById(`machine-start-${machineNumber}`).disabled = true;
+    document.getElementById(`machine-pause-${machineNumber}`).disabled = false;
+    document.getElementById(`machine-stop-${machineNumber}`).disabled = false;
+    
+    timers[timerKey].interval = setInterval(() => updateMachineTimer(machineNumber), 1000);
+    
+    alert(`Relance démarrée : ${temp}°C pendant ${duration} minutes`);
 }
 
 // Dryer functions
@@ -332,53 +435,221 @@ function updateDryingRules() {
     }
 }
 
-// Timer functions for dryers
-function startSechoir() {
-    const sechoir = document.getElementById('sechoir-select').value;
-    const articleType = document.getElementById('article-type').value;
-    const duration = document.getElementById('sechoir-duration').value;
-    const temperature = document.getElementById('sechoir-temperature').value;
-    const weight = document.getElementById('sechoir-weight').value;
-    const operator = document.getElementById('sechoir-operator').value;
-
-    if (!sechoir || !articleType || !duration || !temperature || !weight || !operator) {
-        alert('Veuillez remplir tous les champs obligatoires');
+// Timer functions for dryers - updated for multiple dryers
+function startSechoir(sechoirNumber) {
+    const program = document.getElementById(`program-sechoir-${sechoirNumber}`);
+    const temperature = document.getElementById(`temperature-sechoir-${sechoirNumber}`);
+    const weight = document.getElementById(`batch-sechoir-${sechoirNumber}`);
+    
+    if (program && !program.value) {
+        alert('Veuillez sélectionner un programme');
+        return;
+    }
+    
+    if (temperature && !temperature.value) {
+        alert('Veuillez saisir la température');
         return;
     }
 
-    timers.sechoir.startTime = new Date();
-    timers.sechoir.state = 'running';
-    
-    document.getElementById('sechoir-status').className = 'status-display running';
-    document.getElementById('sechoir-state').textContent = 'En cours';
-    
-    document.getElementById('sechoir-start').disabled = true;
-    document.getElementById('sechoir-stop').disabled = false;
-    
-    timers.sechoir.interval = setInterval(updateSechoirTimer, 1000);
-}
-
-function stopSechoir() {
-    if (timers.sechoir.interval) {
-        clearInterval(timers.sechoir.interval);
+    const timerKey = `sechoir${sechoirNumber}`;
+    if (!timers[timerKey]) {
+        timers[timerKey] = { interval: null, startTime: null, pausedTime: 0, state: 'stopped' };
     }
     
-    timers.sechoir.state = 'stopped';
-    document.getElementById('sechoir-status').className = 'status-display stopped';
-    document.getElementById('sechoir-state').textContent = 'Arrêtée';
+    timers[timerKey].startTime = new Date();
+    timers[timerKey].state = 'running';
     
-    document.getElementById('sechoir-start').disabled = false;
-    document.getElementById('sechoir-stop').disabled = true;
+    // Update UI
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const startButton = document.getElementById(`sechoir-start-${sechoirNumber}`);
+    const pauseButton = document.getElementById(`sechoir-pause-${sechoirNumber}`);
+    const stopButton = document.getElementById(`sechoir-stop-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'Temps restant';
+    if (startButton) startButton.disabled = true;
+    if (pauseButton) pauseButton.disabled = false;
+    if (stopButton) stopButton.disabled = false;
+    if (statusDot) statusDot.className = 'status-dot running';
+    if (statusText) statusText.textContent = 'En fonctionnement';
+    
+    timers[timerKey].interval = setInterval(() => updateSechoirTimer(sechoirNumber), 1000);
 }
 
-function updateSechoirTimer() {
+function pauseSechoir(sechoirNumber) {
+    const timerKey = `sechoir${sechoirNumber}`;
+    
+    if (!timers[timerKey] || timers[timerKey].state !== 'running') return;
+    
+    timers[timerKey].pausedTime += Date.now() - timers[timerKey].startTime.getTime();
+    timers[timerKey].state = 'paused';
+    clearInterval(timers[timerKey].interval);
+    
+    // Update UI
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const pauseButton = document.getElementById(`sechoir-pause-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'En pause';
+    if (pauseButton) pauseButton.textContent = '▶️ Reprendre';
+    if (statusDot) statusDot.className = 'status-dot paused';
+    if (statusText) statusText.textContent = 'En pause';
+}
+
+function stopSechoir(sechoirNumber) {
+    const timerKey = `sechoir${sechoirNumber}`;
+    
+    if (!timers[timerKey]) return;
+    
+    if (timers[timerKey].interval) {
+        clearInterval(timers[timerKey].interval);
+    }
+    
+    timers[timerKey].state = 'stopped';
+    timers[timerKey].pausedTime = 0;
+    
+    // Update UI
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const timerElement = document.getElementById(`sechoir-timer-${sechoirNumber}`);
+    const startButton = document.getElementById(`sechoir-start-${sechoirNumber}`);
+    const pauseButton = document.getElementById(`sechoir-pause-${sechoirNumber}`);
+    const stopButton = document.getElementById(`sechoir-stop-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'Arrêté';
+    if (timerElement) timerElement.textContent = '00:00:00';
+    if (startButton) startButton.disabled = false;
+    if (pauseButton) pauseButton.disabled = true;
+    if (stopButton) stopButton.disabled = true;
+    if (statusDot) statusDot.className = 'status-dot';
+    if (statusText) statusText.textContent = 'Arrêté';
+    
+    // Reset pause button text
+    if (pauseButton) pauseButton.textContent = '⏸️ Pause';
+}
+
+function cleanSechoir(sechoirNumber) {
+    if (!confirm(`Démarrer le cycle de nettoyage automatique du séchoir ${sechoirNumber} ?`)) {
+        return;
+    }
+    
+    // Stop current operation
+    stopSechoir(sechoirNumber);
+    
+    // Update UI to show maintenance state
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'Nettoyage';
+    if (statusDot) statusDot.className = 'status-dot maintenance';
+    if (statusText) statusText.textContent = 'Nettoyage';
+    
+    // Simulate cleaning process (15 minutes)
+    setTimeout(() => {
+        if (statusElement) statusElement.textContent = 'Arrêté';
+        if (statusDot) statusDot.className = 'status-dot';
+        if (statusText) statusText.textContent = 'Arrêté';
+        alert(`Nettoyage du séchoir ${sechoirNumber} terminé`);
+    }, 900000); // 15 minutes
+    
+    alert(`Nettoyage du séchoir ${sechoirNumber} démarré (durée estimée : 15 minutes)`);
+}
+
+function relanceSechoir(sechoirNumber) {
+    const relanceTemp = prompt('Température de relance (°C):', '55');
+    const relanceDuration = prompt('Durée de relance (minutes):', '40');
+    
+    if (relanceTemp === null || relanceDuration === null) {
+        return; // User cancelled
+    }
+    
+    const temp = parseInt(relanceTemp) || 55;
+    const duration = parseInt(relanceDuration) || 40;
+    
+    if (temp < 30 || temp > 90) {
+        alert('Température doit être entre 30°C et 90°C');
+        return;
+    }
+    
+    if (duration < 5 || duration > 120) {
+        alert('Durée doit être entre 5 et 120 minutes');
+        return;
+    }
+    
+    // Start relance cycle
+    const timerKey = `sechoir${sechoirNumber}`;
+    if (!timers[timerKey]) {
+        timers[timerKey] = { interval: null, startTime: null, pausedTime: 0, state: 'stopped' };
+    }
+    
+    timers[timerKey].startTime = new Date();
+    timers[timerKey].state = 'running';
+    timers[timerKey].relanceMode = true;
+    timers[timerKey].relanceTemp = temp;
+    timers[timerKey].relanceDuration = duration;
+    
+    // Update UI
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    const cycleInfo = document.getElementById(`sechoir-cycle-info-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'Relance en cours';
+    if (statusDot) statusDot.className = 'status-dot running';
+    if (statusText) statusText.textContent = 'Relance';
+    
+    if (cycleInfo) {
+        cycleInfo.style.display = 'block';
+        cycleInfo.innerHTML = `
+            <div class="cycle-program">Relance ${temp}°C</div>
+            <div class="cycle-weight">${temp}°C</div>
+            <div class="cycle-duration">Durée: ${duration} min</div>
+        `;
+    }
+    
+    timers[timerKey].interval = setInterval(() => updateSechoirTimer(sechoirNumber), 1000);
+    
+    alert(`Relance séchoir ${sechoirNumber} démarrée : ${temp}°C pendant ${duration} minutes`);
+}
+
+function resumeAfterMaintenance(sechoirNumber) {
+    if (!confirm(`Reprendre le fonctionnement normal du séchoir ${sechoirNumber} après maintenance ?`)) {
+        return;
+    }
+    
+    // Reset to normal state
+    const statusElement = document.getElementById(`sechoir-timer-status-${sechoirNumber}`);
+    const statusDot = document.getElementById(`status-dot-sechoir-${sechoirNumber}`);
+    const statusText = document.getElementById(`status-text-sechoir-${sechoirNumber}`);
+    const startButton = document.getElementById(`sechoir-start-${sechoirNumber}`);
+    const resumeButton = document.getElementById(`sechoir-resume-${sechoirNumber}`);
+    
+    if (statusElement) statusElement.textContent = 'Arrêté';
+    if (statusDot) statusDot.className = 'status-dot';
+    if (statusText) statusText.textContent = 'Arrêté';
+    if (startButton) startButton.disabled = false;
+    if (resumeButton) resumeButton.style.display = 'none';
+    
+    alert(`Séchoir ${sechoirNumber} prêt pour le fonctionnement normal`);
+}
+
+function updateSechoirTimer(sechoirNumber) {
+    const timerKey = `sechoir${sechoirNumber}`;
+    const timerElement = document.getElementById(`sechoir-timer-${sechoirNumber}`);
+    
+    if (!timers[timerKey] || !timerElement) return;
+    
     const now = new Date();
-    const elapsed = (now.getTime() - timers.sechoir.startTime.getTime()) / 1000;
+    const elapsed = (now.getTime() - timers[timerKey].startTime.getTime() + (timers[timerKey].pausedTime || 0)) / 1000;
     const hours = Math.floor(elapsed / 3600);
     const minutes = Math.floor((elapsed % 3600) / 60);
     const seconds = Math.floor(elapsed % 60);
     
-    document.getElementById('sechoir-timer').textContent = 
+    timerElement.textContent = 
         `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
@@ -1343,6 +1614,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (target.classList.contains('active')) {
                     if (target.id === 'arrets') {
                         loadArretsTable();
+                        loadMachinePauses();
                     } else if (target.id === 'nonconformites') {
                         loadNonConformitesTable();
                     }
@@ -1866,4 +2138,96 @@ function resetDryingProgramForm() {
     if (explanationText) {
         explanationText.remove();
     }
+}
+
+// Machine Pause Event Functions
+async function saveMachinePauseEvent(equipment, pauseStartTime, pauseEndTime, reason) {
+    try {
+        const formData = new FormData();
+        formData.append('action', 'save_machine_pause');
+        formData.append('equipment', equipment);
+        formData.append('pause_start_time', pauseStartTime.toISOString().slice(0, 19).replace('T', ' '));
+        
+        if (pauseEndTime) {
+            formData.append('pause_end_time', pauseEndTime.toISOString().slice(0, 19).replace('T', ' '));
+            console.log(`Ending pause for ${equipment}:`, pauseStartTime.toISOString().slice(0, 19).replace('T', ' '), 'to', pauseEndTime.toISOString().slice(0, 19).replace('T', ' '));
+        } else {
+            console.log(`Starting pause for ${equipment}:`, pauseStartTime.toISOString().slice(0, 19).replace('T', ' '));
+        }
+        
+        formData.append('reason', reason);
+        
+        const response = await fetch('ajax.php', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            console.error('Erreur lors de la sauvegarde de la pause:', result.message);
+        } else {
+            console.log('Pause saved successfully:', result);
+            // Refresh pause table if we're on the arrets page
+            if (currentPage === 'arrets') {
+                setTimeout(() => loadMachinePauses(), 500); // Add small delay for database update
+            }
+        }
+    } catch (error) {
+        console.error('Erreur lors de la sauvegarde de la pause:', error);
+    }
+}
+
+// Load machine pauses for Declaration d'Arret page
+async function loadMachinePauses() {
+    try {
+        const response = await fetch('ajax.php?action=get_machine_pauses');
+        const result = await response.json();
+        
+        if (result.success) {
+            displayMachinePauses(result.pauses);
+        } else {
+            console.error('Erreur lors du chargement des pauses:', result.message);
+        }
+    } catch (error) {
+        console.error('Erreur lors du chargement des pauses:', error);
+    }
+}
+
+// Display machine pauses in the Declaration d'Arret page
+function displayMachinePauses(pauses) {
+    const container = document.getElementById('machine-pauses-table-container');
+    if (!container) return;
+    
+    if (pauses.length === 0) {
+        container.innerHTML = '<p>Aucune pause machine enregistrée</p>';
+        return;
+    }
+    
+    let tableHTML = `
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Équipement</th>
+                    <th>Raison</th>
+                    <th>Durée</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    pauses.forEach(pause => {
+        tableHTML += `
+            <tr>
+                <td>${pause.date}</td>
+                <td>${pause.equipment}</td>
+                <td>${pause.reason}</td>
+                <td>${pause.duree}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += '</tbody></table>';
+    container.innerHTML = tableHTML;
 }

@@ -105,15 +105,15 @@ function setupDatabase() {
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS equipment_stops (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                equipment_type ENUM('Machine', 'Séchoir', 'Calandre', 'Repassage') NOT NULL,
+                equipment_type VARCHAR(50) NOT NULL,
                 equipment_name VARCHAR(50) NOT NULL,
-                stop_code VARCHAR(20) NOT NULL,
-                stop_type ENUM('planifié', 'non-planifié') NOT NULL,
+                stop_code VARCHAR(100) NOT NULL,
+                stop_type VARCHAR(50) NOT NULL DEFAULT 'non-planifie',
                 start_time DATETIME NOT NULL,
                 end_time DATETIME NULL,
                 duration_minutes INT NULL,
-                operator VARCHAR(100),
-                comment TEXT,
+                operator VARCHAR(100) NULL,
+                comment TEXT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
